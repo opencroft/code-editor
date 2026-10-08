@@ -1,0 +1,336 @@
+{
+  "id": "opencroft.code-editor",
+  "name": "Code Editor",
+  "version": "0.1.0",
+  "description": "VS Code (monaco-vscode-api workbench) on a folder of one of the space's terminals.",
+  "provides": {
+    "apps": [
+      {
+        "type": "code-editor",
+        "title": "Code Editor",
+        "description": "VS Code on a folder of one of the space's terminals.",
+        "icon": "Code",
+        "actions": [
+          {
+            "id": "read",
+            "description": "Read a text file (UTF-8).",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "terminal": {
+                  "type": "string",
+                  "description": "node-id/handle-id of a terminal in the instance's space"
+                },
+                "path": {
+                  "type": "string",
+                  "description": "Absolute path"
+                }
+              },
+              "required": [
+                "terminal",
+                "path"
+              ]
+            }
+          },
+          {
+            "id": "write",
+            "description": "Create or overwrite a text file (UTF-8).",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "terminal": {
+                  "type": "string",
+                  "description": "node-id/handle-id of a terminal in the instance's space"
+                },
+                "path": {
+                  "type": "string",
+                  "description": "Absolute path"
+                },
+                "content": {
+                  "type": "string",
+                  "description": "File content"
+                }
+              },
+              "required": [
+                "terminal",
+                "path",
+                "content"
+              ]
+            }
+          },
+          {
+            "id": "readdir",
+            "description": "List a directory: [name, type] pairs, type 1 file, 2 directory, +64 symlink.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "terminal": {
+                  "type": "string",
+                  "description": "node-id/handle-id of a terminal in the instance's space"
+                },
+                "path": {
+                  "type": "string",
+                  "description": "Absolute path"
+                }
+              },
+              "required": [
+                "terminal",
+                "path"
+              ]
+            }
+          },
+          {
+            "id": "stat",
+            "description": "Type, size and mtime (ms) of a path.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "terminal": {
+                  "type": "string",
+                  "description": "node-id/handle-id of a terminal in the instance's space"
+                },
+                "path": {
+                  "type": "string",
+                  "description": "Absolute path"
+                }
+              },
+              "required": [
+                "terminal",
+                "path"
+              ]
+            }
+          },
+          {
+            "id": "readFile",
+            "description": "Read a file as base64 (the editor’s file system).",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "terminal": {
+                  "type": "string",
+                  "description": "node-id/handle-id of a terminal in the instance's space"
+                },
+                "path": {
+                  "type": "string",
+                  "description": "Absolute path"
+                }
+              },
+              "required": [
+                "terminal",
+                "path"
+              ]
+            }
+          },
+          {
+            "id": "writeFile",
+            "description": "Write a file from base64 (the editor’s file system).",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "terminal": {
+                  "type": "string",
+                  "description": "node-id/handle-id of a terminal in the instance's space"
+                },
+                "path": {
+                  "type": "string",
+                  "description": "Absolute path"
+                },
+                "base64": {
+                  "type": "string",
+                  "description": "Content, base64"
+                },
+                "create": {
+                  "type": "boolean"
+                },
+                "overwrite": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "terminal",
+                "path",
+                "base64"
+              ]
+            }
+          },
+          {
+            "id": "mkdir",
+            "description": "Create a directory (parent must exist).",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "terminal": {
+                  "type": "string",
+                  "description": "node-id/handle-id of a terminal in the instance's space"
+                },
+                "path": {
+                  "type": "string",
+                  "description": "Absolute path"
+                }
+              },
+              "required": [
+                "terminal",
+                "path"
+              ]
+            }
+          },
+          {
+            "id": "delete",
+            "description": "Delete a file or directory.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "terminal": {
+                  "type": "string",
+                  "description": "node-id/handle-id of a terminal in the instance's space"
+                },
+                "path": {
+                  "type": "string",
+                  "description": "Absolute path"
+                },
+                "recursive": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "terminal",
+                "path"
+              ]
+            }
+          },
+          {
+            "id": "rename",
+            "description": "Move or rename a path.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "terminal": {
+                  "type": "string",
+                  "description": "node-id/handle-id of a terminal in the instance's space"
+                },
+                "from": {
+                  "type": "string",
+                  "description": "Absolute path"
+                },
+                "to": {
+                  "type": "string",
+                  "description": "Absolute path"
+                },
+                "overwrite": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "terminal",
+                "from",
+                "to"
+              ]
+            }
+          },
+          {
+            "id": "terminalConnection",
+            "description": "The terminal-socket connection for a shell on the terminal, started in cwd (used by the editor's integrated terminal).",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "terminal": {
+                  "type": "string",
+                  "description": "node-id/handle-id of a terminal in the instance's space"
+                },
+                "cwd": {
+                  "type": "string",
+                  "description": "Absolute path"
+                }
+              },
+              "required": [
+                "terminal",
+                "cwd"
+              ]
+            }
+          },
+          {
+            "id": "findFiles",
+            "description": "Every file under a folder (relative paths, VCS and dependency folders skipped).",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "terminal": {
+                  "type": "string",
+                  "description": "node-id/handle-id of a terminal in the instance's space"
+                },
+                "folder": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "terminal",
+                "folder"
+              ]
+            }
+          },
+          {
+            "id": "searchText",
+            "description": "Lines under a folder matching a pattern (grep).",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "terminal": {
+                  "type": "string",
+                  "description": "node-id/handle-id of a terminal in the instance's space"
+                },
+                "folder": {
+                  "type": "string"
+                },
+                "pattern": {
+                  "type": "string"
+                },
+                "isRegExp": {
+                  "type": "boolean"
+                },
+                "isCaseSensitive": {
+                  "type": "boolean"
+                },
+                "isWordMatch": {
+                  "type": "boolean"
+                },
+                "maxLines": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "terminal",
+                "folder",
+                "pattern"
+              ]
+            }
+          },
+          {
+            "id": "defaultFolder",
+            "description": "The folder the terminal starts in (its handle cwd, container WORKDIR or ssh home).",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "terminal": {
+                  "type": "string",
+                  "description": "node-id/handle-id of a terminal in the instance's space"
+                }
+              },
+              "required": [
+                "terminal"
+              ]
+            }
+          },
+          {
+            "id": "appInfo",
+            "description": "This instance's address (<space>.<slug>).",
+            "inputSchema": {
+              "type": "object",
+              "properties": {}
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "nodes": []
+}

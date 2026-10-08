@@ -1,0 +1,8 @@
+node_modules/
+dist/
+
+# Written by scripts/build-vscode.mjs on install.
+/assets/vscode/
+/src/vscode-build.ts
+/server/fs-script.ts
+/server/html-assets.ts

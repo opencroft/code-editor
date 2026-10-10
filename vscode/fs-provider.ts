@@ -5,7 +5,7 @@ import {
   FileSystemProviderCapabilities,
   FileSystemProviderError,
   FileSystemProviderErrorCode,
-  FileType,
+  type FileType,
   type IFileDeleteOptions,
   type IFileOverwriteOptions,
   type IFileSystemProviderWithFileReadWriteCapability,
@@ -48,9 +48,12 @@ function fromBase64(base64: string): Uint8Array {
  * be FileNotFound, or settings and recent-file lookups report failures).
  */
 export class TerminalFileSystemProvider implements IFileSystemProviderWithFileReadWriteCapability {
-  readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.PathCaseSensitive
+  readonly capabilities =
+    FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.PathCaseSensitive
   readonly onDidChangeCapabilities = Event.None
-  private readonly changes = new Emitter<readonly import('@codingame/monaco-vscode-files-service-override').IFileChange[]>()
+  private readonly changes = new Emitter<
+    readonly import('@codingame/monaco-vscode-files-service-override').IFileChange[]
+  >()
   readonly onDidChangeFile = this.changes.event
 
   constructor(private readonly bridge: Bridge) {}
@@ -85,7 +88,12 @@ export class TerminalFileSystemProvider implements IFileSystemProviderWithFileRe
   }
 
   async writeFile(resource: URI, content: Uint8Array, opts: IFileWriteOptions): Promise<void> {
-    await this.call('writeFile', { path: resource.path, base64: toBase64(content), create: opts.create, overwrite: opts.overwrite })
+    await this.call('writeFile', {
+      path: resource.path,
+      base64: toBase64(content),
+      create: opts.create,
+      overwrite: opts.overwrite,
+    })
   }
 
   async mkdir(resource: URI): Promise<void> {

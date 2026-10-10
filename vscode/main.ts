@@ -1,9 +1,10 @@
 // The Code Editor's VS Code page: the full workbench, opened on one folder of
 // one terminal. Built by scripts/build-vscode.mjs into assets/vscode/, loaded by
 // the page server/routes.ts serves, in an iframe the App renders.
+
+import getAccessibilityServiceOverride from '@codingame/monaco-vscode-accessibility-service-override'
 import { initialize, LogLevel } from '@codingame/monaco-vscode-api'
 import { URI } from '@codingame/monaco-vscode-api/vscode/vs/base/common/uri'
-import getAccessibilityServiceOverride from '@codingame/monaco-vscode-accessibility-service-override'
 import getConfigurationServiceOverride from '@codingame/monaco-vscode-configuration-service-override'
 import { initUserConfiguration } from '@codingame/monaco-vscode-configuration-service-override/common'
 import getDialogsServiceOverride from '@codingame/monaco-vscode-dialogs-service-override'
@@ -61,20 +62,18 @@ import '@codingame/monaco-vscode-typescript-basics-default-extension'
 import '@codingame/monaco-vscode-xml-default-extension'
 import '@codingame/monaco-vscode-yaml-default-extension'
 
-// @ts-expect-error resolved by scripts/build-vscode.mjs: worker label -> file next to this one
-import WORKER_FILES from 'oc:worker-files'
+import workerFiles from 'oc:worker-files'
 
 import { getBridge } from './bridge'
 import { TerminalFileSystemProvider } from './fs-provider'
 import { registerOpenFolder } from './open-folder'
 import { getTerminalSearchServiceOverride } from './search'
 import { publishSelection } from './selection'
-import { provideTitleSlot } from './title-slot'
 import { HostTerminalBackend } from './terminal-backend'
+import { provideTitleSlot } from './title-slot'
 
 const bridge = getBridge()
 
-const workerFiles = WORKER_FILES as Record<string, string>
 ;(globalThis as { MonacoEnvironment?: unknown }).MonacoEnvironment = {
   getWorkerUrl: (_moduleId: string, label: string) =>
     workerFiles[label] ? new URL(workerFiles[label], import.meta.url).toString() : undefined,
@@ -95,7 +94,10 @@ await initUserConfiguration(
   }),
 )
 
-const container = document.getElementById('workbench')!
+const container = document.getElementById('workbench')
+if (!container) {
+  throw new Error('The page has no #workbench element to mount VS Code in')
+}
 
 registerOpenFolder(bridge)
 

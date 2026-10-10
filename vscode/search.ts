@@ -60,7 +60,10 @@ class TerminalSearchProvider implements ISearchResultProvider {
     if (cached && Date.now() - cached.at < FILE_LIST_TTL_MS) {
       return cached.files
     }
-    const files = this.bridge.call<{ files: string[]; limitHit: boolean }>('findFiles', { terminal: this.bridge.terminal, folder })
+    const files = this.bridge.call<{ files: string[]; limitHit: boolean }>('findFiles', {
+      terminal: this.bridge.terminal,
+      folder,
+    })
     files.catch(() => this.fileLists.delete(folder))
     this.fileLists.set(folder, { at: Date.now(), files })
     return files
@@ -98,10 +101,13 @@ class TerminalSearchProvider implements ISearchResultProvider {
     } catch {
       re = undefined
     }
-    const byFile = new Map<string, IFileMatch>()
+    const byFile = new Map<string, { resource: URI; results: TextSearchMatch[] }>()
     let limitHit = false
     for (const fq of query.folderQueries) {
-      const result = await this.bridge.call<{ matches: { path: string; line: number; text: string }[]; limitHit: boolean }>('searchText', {
+      const result = await this.bridge.call<{
+        matches: { path: string; line: number; text: string }[]
+        limitHit: boolean
+      }>('searchText', {
         terminal: this.bridge.terminal,
         folder: fq.folder.path,
         pattern,
@@ -132,7 +138,7 @@ class TerminalSearchProvider implements ISearchResultProvider {
           byFile.set(resource.toString(), match)
         }
         const textMatch = new TextSearchMatch(text, ranges, query.previewOptions)
-        match.results!.push(textMatch)
+        match.results.push(textMatch)
         onProgress?.({ resource, results: [textMatch] })
       }
     }
@@ -149,7 +155,10 @@ let bridgeForSearch: Bridge | undefined
 class TerminalSearchService extends SearchService {
   constructor(...args: ConstructorParameters<typeof SearchService>) {
     super(...args)
-    const provider = new TerminalSearchProvider(bridgeForSearch!)
+    if (!bridgeForSearch) {
+      throw new Error('getTerminalSearchServiceOverride must run before the search service is created')
+    }
+    const provider = new TerminalSearchProvider(bridgeForSearch)
     this.registerSearchResultProvider(Schemas.file, SearchProviderType.file, provider)
     this.registerSearchResultProvider(Schemas.file, SearchProviderType.text, provider)
   }

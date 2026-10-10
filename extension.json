@@ -1,7 +1,7 @@
 {
   "id": "opencroft.code-editor",
   "name": "Code Editor",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "VS Code (monaco-vscode-api workbench) on a folder of one of the space's terminals.",
   "provides": {
     "apps": [
@@ -26,10 +26,7 @@
                   "description": "Absolute path"
                 }
               },
-              "required": [
-                "terminal",
-                "path"
-              ]
+              "required": ["terminal", "path"]
             }
           },
           {
@@ -51,11 +48,7 @@
                   "description": "File content"
                 }
               },
-              "required": [
-                "terminal",
-                "path",
-                "content"
-              ]
+              "required": ["terminal", "path", "content"]
             }
           },
           {
@@ -73,10 +66,7 @@
                   "description": "Absolute path"
                 }
               },
-              "required": [
-                "terminal",
-                "path"
-              ]
+              "required": ["terminal", "path"]
             }
           },
           {
@@ -94,10 +84,7 @@
                   "description": "Absolute path"
                 }
               },
-              "required": [
-                "terminal",
-                "path"
-              ]
+              "required": ["terminal", "path"]
             }
           },
           {
@@ -115,10 +102,7 @@
                   "description": "Absolute path"
                 }
               },
-              "required": [
-                "terminal",
-                "path"
-              ]
+              "required": ["terminal", "path"]
             }
           },
           {
@@ -146,11 +130,7 @@
                   "type": "boolean"
                 }
               },
-              "required": [
-                "terminal",
-                "path",
-                "base64"
-              ]
+              "required": ["terminal", "path", "base64"]
             }
           },
           {
@@ -168,10 +148,7 @@
                   "description": "Absolute path"
                 }
               },
-              "required": [
-                "terminal",
-                "path"
-              ]
+              "required": ["terminal", "path"]
             }
           },
           {
@@ -192,10 +169,7 @@
                   "type": "boolean"
                 }
               },
-              "required": [
-                "terminal",
-                "path"
-              ]
+              "required": ["terminal", "path"]
             }
           },
           {
@@ -220,11 +194,7 @@
                   "type": "boolean"
                 }
               },
-              "required": [
-                "terminal",
-                "from",
-                "to"
-              ]
+              "required": ["terminal", "from", "to"]
             }
           },
           {
@@ -242,10 +212,7 @@
                   "description": "Absolute path"
                 }
               },
-              "required": [
-                "terminal",
-                "cwd"
-              ]
+              "required": ["terminal", "cwd"]
             }
           },
           {
@@ -262,10 +229,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "terminal",
-                "folder"
-              ]
+              "required": ["terminal", "folder"]
             }
           },
           {
@@ -297,11 +261,7 @@
                   "type": "number"
                 }
               },
-              "required": [
-                "terminal",
-                "folder",
-                "pattern"
-              ]
+              "required": ["terminal", "folder", "pattern"]
             }
           },
           {
@@ -315,9 +275,7 @@
                   "description": "node-id/handle-id of a terminal in the instance's space"
                 }
               },
-              "required": [
-                "terminal"
-              ]
+              "required": ["terminal"]
             }
           },
           {

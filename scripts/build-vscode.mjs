@@ -83,7 +83,7 @@ const assetUrls = {
         const file = path.resolve(path.dirname(args.path), rel)
         const ref = await emitAsset(file).catch(() => null)
         if (!ref) continue
-        out += code.slice(at, match.index) + `new URL(${JSON.stringify(ref)}, import.meta.url)`
+        out += `${code.slice(at, match.index)}new URL(${JSON.stringify(ref)}, import.meta.url)`
         at = match.index + match[0].length
       }
       return { contents: out + code.slice(at), loader: 'js' }
@@ -136,7 +136,14 @@ const common = {
   // The bundled packages' license notices stay in the files that are served.
   legalComments: 'eof',
   logLevel: 'warning',
-  loader: { '.ttf': 'dataurl', '.woff': 'dataurl', '.woff2': 'dataurl', '.png': 'dataurl', '.svg': 'dataurl', '.wasm': 'binary' },
+  loader: {
+    '.ttf': 'dataurl',
+    '.woff': 'dataurl',
+    '.woff2': 'dataurl',
+    '.png': 'dataurl',
+    '.svg': 'dataurl',
+    '.wasm': 'binary',
+  },
 }
 
 // Workers: each its own self-contained module, named by the label VS Code asks for.
@@ -149,7 +156,12 @@ const WORKERS = {
 }
 const workerFiles = {}
 for (const [label, entry] of Object.entries(WORKERS)) {
-  const result = await esbuild.build({ ...common, stdin: { contents: `import ${JSON.stringify(entry)}`, resolveDir: process.cwd() }, write: false, plugins: [assetUrls, cssAsText, nodeStub] })
+  const result = await esbuild.build({
+    ...common,
+    stdin: { contents: `import ${JSON.stringify(entry)}`, resolveDir: process.cwd() },
+    write: false,
+    plugins: [assetUrls, cssAsText, nodeStub],
+  })
   const code = result.outputFiles[0].contents
   const name = `${label}-${hash(code)}.js`
   await writeFile(path.join(OUT, name), code)
@@ -160,7 +172,10 @@ const workerFilesModule = {
   name: 'worker-files',
   setup(build) {
     build.onResolve({ filter: /^oc:worker-files$/ }, () => ({ path: 'worker-files', namespace: 'oc' }))
-    build.onLoad({ filter: /.*/, namespace: 'oc' }, () => ({ contents: `export default ${JSON.stringify(workerFiles)}`, loader: 'js' }))
+    build.onLoad({ filter: /.*/, namespace: 'oc' }, () => ({
+      contents: `export default ${JSON.stringify(workerFiles)}`,
+      loader: 'js',
+    }))
   },
 }
 

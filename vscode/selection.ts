@@ -44,7 +44,7 @@ export async function publishSelection(bridge: Bridge): Promise<void> {
       const text = model.getValueInRange(selection)
       label = `${name}:${from}${to !== from ? `-${to}` : ''}`
       lines.push(`Selected ${to !== from ? `lines ${from}-${to}` : `line ${from}`}:`)
-      lines.push('```' + model.getLanguageId(), text.slice(0, MAX_SELECTION_CHARS), '```')
+      lines.push(`\`\`\`${model.getLanguageId()}`, text.slice(0, MAX_SELECTION_CHARS), '```')
       if (text.length > MAX_SELECTION_CHARS) {
         lines.push(`(selection cut at ${MAX_SELECTION_CHARS} of ${text.length} characters)`)
       }

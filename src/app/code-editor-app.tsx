@@ -1,12 +1,20 @@
-import { React, routeUrl } from '@ext/host'
-import { type AppComponentProps, callAppAction, describeGraphRefs, type GraphRefDescription, legacy, TerminalSelector } from '@opencroft/client'
-import { FolderOpen } from 'lucide-react'
+import { callAppAction } from '@opencroft/client/actions'
+import type { AppComponentProps } from '@opencroft/client/app'
+import { routeUrl } from '@opencroft/client/extension'
+import { describeGraphRefs, type GraphRefDescription } from '@opencroft/client/graph'
+import { TerminalSelector } from '@opencroft/client/terminal'
+import * as lucide from 'lucide-react'
+import { type LucideIcon, SquareTerminal } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
 import { ChatDock, type ChatSelection } from './chat-dock'
-
-
-const { useEffect, useRef, useState } = React
+import {
+  type TerminalFolder,
+  TerminalFolderDialog,
+  TerminalFolderForm,
+  type TerminalPickerSlot,
+} from './terminal-folder-dialog'
 
 // The space's main conversation.
 const CHAT_THREAD_ID = 'main'
@@ -31,83 +39,42 @@ function readWorkspace(instanceId: string): Workspace | undefined {
   }
 }
 
-function OpenForm({ instanceId, spaceSlug, initial, onOpen, onCancel }: {
-  instanceId: string
-  spaceSlug: string
-  initial?: Workspace
-  onOpen: (w: Workspace) => void
-  onCancel?: () => void
-}) {
-  const [terminal, setTerminal] = useState(initial?.terminal ?? '')
-  // Empty means the terminal's own starting folder, asked of it on Open.
-  const [folder, setFolder] = useState(initial?.folder ?? '')
-  const [opening, setOpening] = useState(false)
-  const [error, setError] = useState<string | undefined>()
-  const valid = Boolean(terminal) && (!folder.trim() || folder.trim().startsWith('/'))
-
-  const submit = async () => {
-    setError(undefined)
-    let path = folder.trim()
-    if (!path) {
-      setOpening(true)
-      try {
-        path = (await callAppAction<{ folder: string }>(instanceId, 'defaultFolder', { terminal })).folder
-      } catch (err) {
-        setError(err instanceof Error ? err.message : String(err))
-        return
-      } finally {
-        setOpening(false)
-      }
-    }
-    onOpen({ terminal, folder: path })
-  }
-
-  return (
-    <form
-      className='mx-auto flex w-full max-w-md flex-col gap-3 p-6'
-      onSubmit={(e) => {
-        e.preventDefault()
-        if (valid && !opening) {
-          void submit()
-        }
-      }}
-    >
-      <div className='text-base font-medium'>Open a folder</div>
-      <label className='flex flex-col gap-1 text-sm'>
-        Terminal
-        <TerminalSelector spaceSlug={spaceSlug} value={terminal} onChange={setTerminal} placeholder='Pick a terminal' />
-      </label>
-      <label className='flex flex-col gap-1 text-sm'>
-        Folder
-        <input
-          className='h-9 rounded-md border border-input bg-background px-2 font-mono text-sm'
-          value={folder}
-          onChange={(e) => setFolder(e.target.value)}
-          placeholder="The terminal's own folder"
-        />
-      </label>
-      {error && <div className='text-sm text-destructive'>{error}</div>}
-      <div className='flex gap-2'>
-        {onCancel && (
-          <button
-            type='button'
-            onClick={onCancel}
-            className='inline-flex h-9 flex-1 items-center justify-center rounded-md border px-3 text-sm hover:bg-muted'
-          >
-            Cancel
-          </button>
-        )}
-        <button
-          type='submit'
-          disabled={!valid || opening}
-          className='inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-md bg-primary px-3 text-sm text-primary-foreground hover:bg-primary/80 disabled:opacity-50'
-        >
-          <FolderOpen className='size-4' />
-          {opening ? 'Opening…' : 'Open'}
-        </button>
-      </div>
-    </form>
+// The terminal field of the kit's form: the host's picker, limited to this space.
+function terminalPicker(spaceSlug: string) {
+  return ({ value, onChange }: TerminalPickerSlot) => (
+    <TerminalSelector spaceSlug={spaceSlug} value={value} onChange={onChange} placeholder='Pick a terminal' />
   )
+}
+
+// The directory bit of the `stat` action's `type`, which is VS Code's FileType
+// (FileType.Directory), as the server's FILE_TYPE spells out.
+const FILE_TYPE_DIRECTORY = 2
+
+// An empty folder is the terminal's own starting folder, asked of it on Open.
+// A typed one must be a folder on that terminal: the editor would otherwise
+// open on nothing, where no file can be created. A failure rejects, which the
+// form shows under its fields.
+async function resolveWorkspace(instanceId: string, choice: TerminalFolder): Promise<Workspace> {
+  if (!choice.folder) {
+    const { folder } = await callAppAction<{ folder: string }>(instanceId, 'defaultFolder', {
+      terminal: choice.terminal,
+    })
+    return { terminal: choice.terminal, folder }
+  }
+  const found = await callAppAction<{ type: number }>(instanceId, 'stat', {
+    terminal: choice.terminal,
+    path: choice.folder,
+  }).catch((err: unknown) => {
+    // The action's errors start with the file-system code ("ENOENT: /path").
+    if (err instanceof Error && err.message.startsWith('ENOENT')) {
+      throw new Error(`There is no folder ${choice.folder} on this terminal.`)
+    }
+    throw err
+  })
+  if (!(found.type & FILE_TYPE_DIRECTORY)) {
+    throw new Error(`${choice.folder} is a file, not a folder.`)
+  }
+  return choice
 }
 
 /**
@@ -127,19 +94,40 @@ function WorkspaceBadge({ workspace }: { workspace: Workspace }) {
       live = false
     }
   }, [workspace.terminal])
-  const iconSet = legacy.icons as unknown as Record<string, React.ComponentType<{ size?: number }>>
-  const Icon = (desc?.icon && iconSet[desc.icon]) || iconSet.SquareTerminal
+  // The icon is named by data, so it is looked up on the module. The host's
+  // icon set draws a placeholder for a name it does not have, but this
+  // namespace is the bundler's copy of its exports, where such a name is
+  // `undefined`: the terminal's own icon stands in for it.
+  const Icon =
+    (desc?.icon ? ((lucide as Record<string, unknown>)[desc.icon] as LucideIcon) : undefined) ?? SquareTerminal
   const name = desc ? (desc.detail ? `${desc.name} · ${desc.detail}` : desc.name) : workspace.terminal
-  const tooltip = [`Terminal: ${name}`, `cwd: ${workspace.folder}`, 'Click to open another terminal or folder'].join('\n')
+  const tooltip = [`Terminal: ${name}`, `cwd: ${workspace.folder}`, 'Click to open another terminal or folder'].join(
+    '\n',
+  )
   return (
-    <span title={tooltip} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap', fontSize: 12, maxWidth: 280 }}>
-      {Icon && <Icon size={14} />}
+    <span
+      title={tooltip}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        whiteSpace: 'nowrap',
+        fontSize: 12,
+        maxWidth: 280,
+      }}
+    >
+      <Icon size={14} />
       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</span>
     </span>
   )
 }
 
-function Workbench({ instanceId, workspace, onOpenFolder, onSelection }: {
+function Workbench({
+  instanceId,
+  workspace,
+  onOpenFolder,
+  onSelection,
+}: {
   instanceId: string
   workspace: Workspace
   onOpenFolder: () => void
@@ -182,7 +170,9 @@ function Workbench({ instanceId, workspace, onOpenFolder, onSelection }: {
       openFolder: () => callbacks.current.onOpenFolder(),
       // Copied out of the page's window into plain strings of this one.
       onSelection: (selection: ChatSelection | null) =>
-        callbacks.current.onSelection(selection ? { label: String(selection.label), content: String(selection.content) } : null),
+        callbacks.current.onSelection(
+          selection ? { label: String(selection.label), content: String(selection.content) } : null,
+        ),
       onTitleSlot: (slot: HTMLElement) => setTitleSlot(slot),
     }
     el.src = `${routeUrl('vscode')}?theme=${dark ? 'dark' : 'light'}&workspace=${encodeURIComponent(`${workspace.terminal}:${workspace.folder}`)}`
@@ -208,10 +198,15 @@ export function CodeEditorApp({ instanceId, spaceSlug }: AppComponentProps) {
     setPicking(false)
   }
 
+  const submit = async (choice: TerminalFolder) => open(await resolveWorkspace(instanceId, choice))
+
   if (!workspace) {
     return (
       <div className='flex h-full min-h-0 flex-col'>
-        <OpenForm instanceId={instanceId} spaceSlug={spaceSlug} onOpen={open} />
+        <div className='mx-auto flex w-full max-w-md flex-col gap-3 p-6'>
+          <div className='text-base font-medium'>Open a folder</div>
+          <TerminalFolderForm renderTerminalPicker={terminalPicker(spaceSlug)} onSubmit={submit} />
+        </div>
       </div>
     )
   }
@@ -229,13 +224,13 @@ export function CodeEditorApp({ instanceId, spaceSlug }: AppComponentProps) {
       </ChatDock>
       {/* Over the running editor rather than instead of it: VS Code, its unsaved
           edits and its terminals stay until another folder is actually opened. */}
-      {picking && (
-        <div className='absolute inset-0 z-10 flex items-start justify-center bg-background/80 pt-[10vh] backdrop-blur-sm'>
-          <div className='w-full max-w-md rounded-lg border bg-background shadow-lg'>
-            <OpenForm instanceId={instanceId} spaceSlug={spaceSlug} initial={workspace} onOpen={open} onCancel={() => setPicking(false)} />
-          </div>
-        </div>
-      )}
+      <TerminalFolderDialog
+        open={picking}
+        onOpenChange={setPicking}
+        defaultValue={workspace}
+        renderTerminalPicker={terminalPicker(spaceSlug)}
+        onSubmit={submit}
+      />
     </div>
   )
 }

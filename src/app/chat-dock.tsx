@@ -1,13 +1,5 @@
-import host, { React } from '@ext/host'
-
-// The host's chat surface, taken off the host object (the shim's named exports
-// do not include it) and read defensively, so a host without it renders the
-// editor alone.
-const HostChatDock = host?.ChatDock
-const SelectionProvider = host?.SelectionProvider
-const useSelection = host?.useSelection
-
-const chatDockSupported = Boolean(HostChatDock && SelectionProvider && useSelection)
+import { ChatDock as HostChatDock, SelectionProvider, useSelection } from '@opencroft/client/chat'
+import { type ReactNode, useEffect } from 'react'
 
 export interface ChatSelection {
   label: string
@@ -20,7 +12,7 @@ function SelectionBridge({ selection }: { selection: ChatSelection | null }) {
   const { setSelection, clearSelection } = useSelection()
   const label = selection?.label ?? ''
   const content = selection?.content ?? ''
-  React.useEffect(() => {
+  useEffect(() => {
     if (!label) {
       clearSelection()
       return
@@ -32,15 +24,17 @@ function SelectionBridge({ selection }: { selection: ChatSelection | null }) {
 }
 
 /** The editor with the space's chat beside it, and what the reader has selected passed into it. */
-export function ChatDock({ space, threadId, selection, children }: {
+export function ChatDock({
+  space,
+  threadId,
+  selection,
+  children,
+}: {
   space: string
   threadId: string
   selection: ChatSelection | null
-  children: React.ReactNode
+  children: ReactNode
 }) {
-  if (!chatDockSupported) {
-    return <>{children}</>
-  }
   return (
     <SelectionProvider>
       <HostChatDock space={space} id={threadId} title={`Chat · ${space}`}>

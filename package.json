@@ -1,6 +1,6 @@
 {
   "name": "code-editor",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "license": "MIT",
   "private": true,
   "type": "module",
@@ -68,6 +68,8 @@
   },
   "scripts": {
     "build": "node scripts/build-vscode.mjs",
-    "postinstall": "node scripts/build-vscode.mjs"
+    "postinstall": "node scripts/build-vscode.mjs",
+    "fix": "opencroft-dev fix",
+    "typecheck": "opencroft-dev typecheck"
   }
 }

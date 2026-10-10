@@ -1,5 +1,11 @@
-import host from '@ext/host'
-import type { AppActionContext, AppsExport } from '@opencroft/server'
+import { type AppActionContext, type AppsExport, type HostAppInstance, apps as hostApps } from '@opencroft/server/apps'
+import { graph } from '@opencroft/server/graph'
+import {
+  type ExecOptions,
+  type ExecResult,
+  type TerminalContext,
+  terminal as terminalApi,
+} from '@opencroft/server/terminal'
 
 import { FS_SCRIPT } from './fs-script'
 
@@ -16,15 +22,6 @@ const WRITE_CHUNK_CHARS = 96_000
 const TERMINAL_CONTEXT_HANDLE_TYPE = 'builtin.core.terminal-context'
 
 type Params = Record<string, unknown>
-type TerminalContext = Awaited<ReturnType<typeof host.terminal.getContext>>
-
-// The part of the host's graph.listHandles this reads; @opencroft/server's
-// HostGraphApi does not declare it.
-interface GraphApiWithListHandles {
-  listHandles: (filter?: { role?: 'source' | 'target'; handleType?: string }) => Promise<
-    { nodeId: string; handleId: string; spaceSlug: string }[]
-  >
-}
 
 // Which terminals a space has comes from the host's listHandles, which walks
 // every graph and expands every dynamic handle (each Git worktree, each running
@@ -46,7 +43,7 @@ function terminalsOf(space: string, refresh = false): Promise<Set<string>> {
     return cached.terminals
   }
   const entry = { at: Date.now(), pending: true, terminals: Promise.resolve(new Set<string>()) }
-  entry.terminals = (host.graph as unknown as GraphApiWithListHandles)
+  entry.terminals = graph
     .listHandles({ role: 'source', handleType: TERMINAL_CONTEXT_HANDLE_TYPE })
     .then((handles) => new Set(handles.filter((h) => h.spaceSlug === space).map((h) => `${h.nodeId}/${h.handleId}`)))
     .finally(() => {
@@ -88,7 +85,7 @@ async function terminalOf(ctx: AppActionContext, params: Params): Promise<Termin
       })
       .catch(() => {})
   }
-  return host.terminal.getContext(terminal.slice(0, slash), terminal.slice(slash + 1))
+  return terminalApi.getContext(terminal.slice(0, slash), terminal.slice(slash + 1))
 }
 
 /** Normalise an absolute path: collapse "." and "..", never above "/". */
@@ -104,7 +101,7 @@ function absolute(raw: unknown): string {
       parts.push(part)
     }
   }
-  return '/' + parts.join('/')
+  return `/${parts.join('/')}`
 }
 
 // VS Code fires file operations in bursts (a folder expanding stats every
@@ -124,8 +121,9 @@ async function inLane<T>(key: string, run: () => Promise<T>): Promise<T> {
     lane = { running: 0, waiting: [] }
     lanes.set(key, lane)
   }
+  const { waiting } = lane
   if (lane.running >= MAX_CONCURRENT_PER_MACHINE) {
-    await new Promise<void>((resolve) => lane!.waiting.push(resolve))
+    await new Promise<void>((resolve) => waiting.push(resolve))
   }
   lane.running++
   try {
@@ -142,16 +140,15 @@ function isChannelRefusal(err: unknown): boolean {
 
 /** The machine a context's commands run on: its ssh endpoint, or this host. */
 function machineOf(terminal: TerminalContext): string {
-  const ctx = terminal as unknown as { type?: string; host?: string; port?: number; username?: string; via?: Record<string, unknown> }
-  const ssh = ctx.type === 'ssh' ? ctx : ctx.via?.type === 'ssh' ? (ctx.via as typeof ctx) : undefined
+  const ssh = terminal.type === 'ssh' ? terminal : terminal.via?.type === 'ssh' ? terminal.via : undefined
   return ssh ? `ssh:${ssh.username ?? ''}@${ssh.host ?? ''}:${ssh.port ?? 22}` : 'local'
 }
 
-async function runLimited(terminal: TerminalContext, args: string[], opts: Parameters<typeof host.terminal.runResult>[2]) {
+async function runLimited(terminal: TerminalContext, args: string[], opts: ExecOptions): Promise<ExecResult> {
   const key = machineOf(terminal)
   for (let attempt = 0; ; attempt++) {
     try {
-      return await inLane(key, () => host.terminal.runResult(terminal, args, opts))
+      return await inLane<ExecResult>(key, () => terminalApi.runResult(terminal, args, opts))
     } catch (err) {
       if (attempt >= CHANNEL_RETRIES || !isChannelRefusal(err)) {
         throw err
@@ -180,7 +177,9 @@ async function fsOp(
   const result = await runLimited(terminal, ['sh', '-c', FS_SCRIPT, 'sh', op, ...args], { env, maxOutputBytes })
   if (result.exitCode !== 0) {
     const code = /OCERR:([A-Z]+)/.exec(result.stderr)?.[1]
-    throw new Error(code ? `${code}: ${args[0] ?? ''}` : result.stderr.trim() || `${op} exited with code ${result.exitCode}`)
+    throw new Error(
+      code ? `${code}: ${args[0] ?? ''}` : result.stderr.trim() || `${op} exited with code ${result.exitCode}`,
+    )
   }
   if (result.truncated) {
     throw new Error(`EFBIG: ${args[0] ?? ''}`)
@@ -221,7 +220,13 @@ async function readdir(ctx: AppActionContext, params: Params) {
 }
 
 async function readFile(ctx: AppActionContext, params: Params) {
-  const out = await fsOp(await terminalOf(ctx, params), 'read', [absolute(params.path)], undefined, Math.ceil(MAX_READ_BYTES * 1.4))
+  const out = await fsOp(
+    await terminalOf(ctx, params),
+    'read',
+    [absolute(params.path)],
+    undefined,
+    Math.ceil(MAX_READ_BYTES * 1.4),
+  )
   return { base64: out.replace(/\s+/g, '') }
 }
 
@@ -229,7 +234,9 @@ async function writeFile(ctx: AppActionContext, params: Params) {
   const terminal = await terminalOf(ctx, params)
   const path = absolute(params.path)
   const data = typeof params.base64 === 'string' ? params.base64 : ''
-  const temp = (await fsOp(terminal, 'write-check', [path, flag(params.create ?? true), flag(params.overwrite ?? true)])).trim()
+  const temp = (
+    await fsOp(terminal, 'write-check', [path, flag(params.create ?? true), flag(params.overwrite ?? true)])
+  ).trim()
   for (let at = 0; at < data.length; at += WRITE_CHUNK_CHARS) {
     // Chunk boundaries fall on multiples of 4 characters, so each decodes on its own.
     await fsOp(terminal, 'write-chunk', [temp], { OC_DATA: data.slice(at, at + WRITE_CHUNK_CHARS) })
@@ -249,7 +256,11 @@ async function remove(ctx: AppActionContext, params: Params) {
 }
 
 async function rename(ctx: AppActionContext, params: Params) {
-  await fsOp(await terminalOf(ctx, params), 'rename', [absolute(params.from), absolute(params.to), flag(params.overwrite)])
+  await fsOp(await terminalOf(ctx, params), 'rename', [
+    absolute(params.from),
+    absolute(params.to),
+    flag(params.overwrite),
+  ])
   return { ok: true }
 }
 
@@ -258,8 +269,17 @@ const MAX_TEXT_MATCH_LINES = 5_000
 
 /** Every file under `folder` (relative paths), for the editor's Go to File. */
 async function findFiles(ctx: AppActionContext, params: Params) {
-  const out = await fsOp(await terminalOf(ctx, params), 'find', [absolute(params.folder), String(MAX_FOUND_FILES + 1)], undefined, 64 * 1024 * 1024)
-  const files = out.split('\n').filter(Boolean).map((line) => line.replace(/^\.\//, ''))
+  const out = await fsOp(
+    await terminalOf(ctx, params),
+    'find',
+    [absolute(params.folder), String(MAX_FOUND_FILES + 1)],
+    undefined,
+    64 * 1024 * 1024,
+  )
+  const files = out
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => line.replace(/^\.\//, ''))
   return { files: files.slice(0, MAX_FOUND_FILES), limitHit: files.length > MAX_FOUND_FILES }
 }
 
@@ -313,9 +333,10 @@ async function write(ctx: AppActionContext, params: Params) {
   return writeFile(ctx, { ...params, base64: Buffer.from(String(params.content ?? ''), 'utf-8').toString('base64') })
 }
 
-// The same flattening the host's Terminal node does for a docker-exec context
-// (connectionFromContext in core's terminal node), with the working directory
-// set to the opened folder.
+// A docker-exec context flattened into the command that opens a login shell in
+// its container, run over the context's own transport (ssh, wsl or this host):
+// the way the host's Terminal node opens one, with the working directory set
+// to the opened folder.
 const SHELL_FALLBACK_INNER = 'command -v bash >/dev/null 2>&1 && exec bash -l || exec sh -l'
 
 function shellQuote(value: string): string {
@@ -343,13 +364,13 @@ function dockerExecConnection(value: Record<string, unknown>, cwd: string) {
  * started in `cwd`: the connection the host's terminal socket takes.
  */
 async function terminalConnection(ctx: AppActionContext, params: Params) {
-  const value = (await terminalOf(ctx, params)) as unknown as Record<string, unknown>
+  const value = await terminalOf(ctx, params)
   const cwd = absolute(params.cwd)
   if (value.type === 'docker-exec') {
     return dockerExecConnection(value, cwd)
   }
   const { type, ...config } = value
-  return { type: (type as string) ?? 'local', config: { ...config, cwd } }
+  return { type: type ?? 'local', config: { ...config, cwd } }
 }
 
 export const apps: AppsExport = {
@@ -376,7 +397,7 @@ export const apps: AppsExport = {
 // Warm every instance's space terminal list when the extension activates
 // (server start, a rebuild), so the first file operation does not wait on it.
 export async function load(): Promise<void> {
-  const instances = await host.apps.listInstances('code-editor').catch(() => [])
+  const instances: HostAppInstance[] = await hostApps.listInstances('code-editor').catch(() => [])
   for (const space of new Set(instances.map((i) => i.spaceSlug))) {
     terminalsOf(space).catch(() => {})
   }

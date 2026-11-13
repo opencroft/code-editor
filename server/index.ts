@@ -1,6 +1,7 @@
 import { type AppActionContext, type AppsExport, type HostAppInstance, apps as hostApps } from '@opencroft/server/apps'
 import { graph } from '@opencroft/server/graph'
 import {
+  agentRefusalOf,
   type ExecOptions,
   type ExecResult,
   type TerminalContext,
@@ -85,7 +86,15 @@ async function terminalOf(ctx: AppActionContext, params: Params): Promise<Termin
       })
       .catch(() => {})
   }
-  return terminalApi.getContext(terminal.slice(0, slash), terminal.slice(slash + 1))
+  const context = await terminalApi.getContext(terminal.slice(0, slash), terminal.slice(slash + 1))
+  // A context its source refused to agents opens only for a person calling from this App's own
+  // UI. Every other caller is refused with the source's reason: an agent's `app_call`, named or
+  // not (a surface that cannot name the agent sets neither caller), and a call from a graph.
+  const refusal = ctx.callerPerson ? null : agentRefusalOf(context)
+  if (refusal) {
+    throw new Error(refusal)
+  }
+  return context
 }
 
 /** Normalise an absolute path: collapse "." and "..", never above "/". */

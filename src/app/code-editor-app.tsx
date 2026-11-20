@@ -1,5 +1,6 @@
 import { callAppAction } from '@opencroft/client/actions'
 import type { AppComponentProps } from '@opencroft/client/app'
+import { ChatDock, usePublishSelection } from '@opencroft/client/chat'
 import { routeUrl } from '@opencroft/client/extension'
 import { describeGraphRefs, type GraphRefDescription } from '@opencroft/client/graph'
 import { TerminalSelector } from '@opencroft/client/terminal'
@@ -8,7 +9,8 @@ import { type LucideIcon, SquareTerminal } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
-import { ChatDock, type ChatSelection } from './chat-dock'
+import type { OpenFile } from '../../vscode/bridge'
+import { editorSelection } from './editor-selection'
 import {
   type TerminalFolder,
   TerminalFolderDialog,
@@ -77,30 +79,40 @@ async function resolveWorkspace(instanceId: string, choice: TerminalFolder): Pro
   return choice
 }
 
+/** The host's one name for the terminal, as TerminalRef shows it; a host that gives none leaves its owner's name. */
+function terminalName(desc: GraphRefDescription): string {
+  return desc.title ?? desc.name
+}
+
+/** How the host describes the terminal: its name and icon. Null until it answers, and when it can't. */
+function useTerminalDescription(terminal: string): GraphRefDescription | null {
+  const [desc, setDesc] = useState<GraphRefDescription | null>(null)
+  useEffect(() => {
+    let live = true
+    describeGraphRefs([terminal])
+      .then((refs) => live && setDesc(refs[terminal] ?? null))
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [terminal])
+  return desc
+}
+
 /**
  * The opened workspace in VS Code's title bar, where its logo was: the
  * terminal as TerminalRef shows it (its type's icon and name), the terminal
  * and folder on hover. Rendered into the VS Code page, which has none of
  * OpenCroft's styles, so it styles itself and takes the title bar's colour.
  */
-function WorkspaceBadge({ workspace }: { workspace: Workspace }) {
-  const [desc, setDesc] = useState<GraphRefDescription | null>(null)
-  useEffect(() => {
-    let live = true
-    describeGraphRefs([workspace.terminal])
-      .then((refs) => live && setDesc(refs[workspace.terminal] ?? null))
-      .catch(() => {})
-    return () => {
-      live = false
-    }
-  }, [workspace.terminal])
+function WorkspaceBadge({ workspace, desc }: { workspace: Workspace; desc: GraphRefDescription | null }) {
   // The icon is named by data, so it is looked up on the module. The host's
   // icon set draws a placeholder for a name it does not have, but this
   // namespace is the bundler's copy of its exports, where such a name is
   // `undefined`: the terminal's own icon stands in for it.
   const Icon =
     (desc?.icon ? ((lucide as Record<string, unknown>)[desc.icon] as LucideIcon) : undefined) ?? SquareTerminal
-  const name = desc ? (desc.detail ? `${desc.name} · ${desc.detail}` : desc.name) : workspace.terminal
+  const name = desc ? terminalName(desc) : workspace.terminal
   const tooltip = [`Terminal: ${name}`, `cwd: ${workspace.folder}`, 'Click to open another terminal or folder'].join(
     '\n',
   )
@@ -122,36 +134,37 @@ function WorkspaceBadge({ workspace }: { workspace: Workspace }) {
   )
 }
 
+/**
+ * VS Code on one workspace, and what the reader has open in it published to
+ * the chat. Keyed by the workspace, so opening another folder clears the old
+ * one's selection with the old page.
+ */
 function Workbench({
   instanceId,
   workspace,
   onOpenFolder,
-  onSelection,
 }: {
   instanceId: string
   workspace: Workspace
   onOpenFolder: () => void
-  onSelection: (selection: ChatSelection | null) => void
 }) {
   const frame = useRef<HTMLIFrameElement>(null)
-  // The instance's address, for the chat reference; the props only carry its id.
-  const [app, setApp] = useState<string>()
-  useEffect(() => {
-    let live = true
-    callAppAction<{ address: string }>(instanceId, 'appInfo', {})
-      .then((info) => live && setApp(info.address))
-      .catch(() => live && setApp(instanceId))
-    return () => {
-      live = false
-    }
-  }, [instanceId])
   const [titleSlot, setTitleSlot] = useState<HTMLElement | null>(null)
-  const callbacks = useRef({ onOpenFolder, onSelection })
-  callbacks.current = { onOpenFolder, onSelection }
+  const callbacks = useRef({ onOpenFolder })
+  callbacks.current = { onOpenFolder }
+  const desc = useTerminalDescription(workspace.terminal)
+
+  // Undefined until the page first reports: nothing is published while VS Code loads.
+  const [openFile, setOpenFile] = useState<OpenFile | null>()
+  usePublishSelection(
+    openFile === undefined
+      ? null
+      : editorSelection({ ...workspace, terminalName: desc ? terminalName(desc) : undefined }, openFile),
+  )
 
   useEffect(() => {
     const el = frame.current
-    if (!el || !app) {
+    if (!el) {
       return
     }
     // The page (served by the extension's "vscode" route) is same-origin, so it
@@ -165,23 +178,19 @@ function Workbench({
         callAppAction(instanceId, action, JSON.parse(JSON.stringify(params)) as Record<string, unknown>),
       terminal: workspace.terminal,
       folder: workspace.folder,
-      app,
       dark,
       openFolder: () => callbacks.current.onOpenFolder(),
-      // Copied out of the page's window into plain strings of this one.
-      onSelection: (selection: ChatSelection | null) =>
-        callbacks.current.onSelection(
-          selection ? { label: String(selection.label), content: String(selection.content) } : null,
-        ),
+      // editorSelection copies the report out of the page's window.
+      onOpenFile: (file: OpenFile | null) => setOpenFile(file),
       onTitleSlot: (slot: HTMLElement) => setTitleSlot(slot),
     }
     el.src = `${routeUrl('vscode')}?theme=${dark ? 'dark' : 'light'}&workspace=${encodeURIComponent(`${workspace.terminal}:${workspace.folder}`)}`
-  }, [instanceId, app, workspace.terminal, workspace.folder])
+  }, [instanceId, workspace.terminal, workspace.folder])
 
   return (
     <>
       <iframe ref={frame} title='Code Editor' className='min-h-0 w-full flex-1 border-0 bg-background' />
-      {titleSlot && createPortal(<WorkspaceBadge workspace={workspace} />, titleSlot)}
+      {titleSlot && createPortal(<WorkspaceBadge workspace={workspace} desc={desc} />, titleSlot)}
     </>
   )
 }
@@ -190,7 +199,6 @@ function Workbench({
 export function CodeEditorApp({ instanceId, spaceSlug }: AppComponentProps) {
   const [workspace, setWorkspace] = useState(() => readWorkspace(instanceId))
   const [picking, setPicking] = useState(!workspace)
-  const [selection, setSelection] = useState<ChatSelection | null>(null)
 
   const open = (next: Workspace) => {
     localStorage.setItem(storageKey(instanceId), JSON.stringify(next))
@@ -213,14 +221,15 @@ export function CodeEditorApp({ instanceId, spaceSlug }: AppComponentProps) {
 
   return (
     <div className='relative flex h-full min-h-0 flex-col'>
-      <ChatDock space={spaceSlug} threadId={CHAT_THREAD_ID} selection={selection}>
-        <Workbench
-          key={`${workspace.terminal}:${workspace.folder}`}
-          instanceId={instanceId}
-          workspace={workspace}
-          onOpenFolder={() => setPicking(true)}
-          onSelection={setSelection}
-        />
+      <ChatDock space={spaceSlug} id={CHAT_THREAD_ID} title={`Chat · ${spaceSlug}`}>
+        <div className='flex min-h-0 min-w-0 flex-1 flex-col'>
+          <Workbench
+            key={`${workspace.terminal}:${workspace.folder}`}
+            instanceId={instanceId}
+            workspace={workspace}
+            onOpenFolder={() => setPicking(true)}
+          />
+        </div>
       </ChatDock>
       {/* Over the running editor rather than instead of it: VS Code, its unsaved
           edits and its terminals stay until another folder is actually opened. */}

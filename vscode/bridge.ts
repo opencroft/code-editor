@@ -11,21 +11,25 @@ export interface Bridge {
   terminal: string
   /** The opened folder, absolute. */
   folder: string
-  /** This App instance's address, `<space>.<slug>` — what `app_call` takes. */
-  app: string
   dark: boolean
   /** Ask the App to show its terminal and folder picker. */
   openFolder(): void
-  /** What the reader has open or selected, for the App's chat; null for nothing. */
-  onSelection(selection: ChatSelection | null): void
+  /** The file the reader has open and what is highlighted in it, for the App's chat; null when no file is open. */
+  onOpenFile(file: OpenFile | null): void
   /** The title bar's logo spot, for the App to render the opened workspace into. */
   onTitleSlot(slot: HTMLElement): void
 }
 
-/** As the host's selection scope takes it: `label` is shown, `content` is sent. */
-export interface ChatSelection {
-  label: string
-  content: string
+/** A file open in the editor, as the page reports it. */
+export interface OpenFile {
+  /** Absolute, on the opened terminal. */
+  path: string
+  /**
+   * The highlighted text, from the editor's buffer (so unsaved edits are in
+   * it), and where it is: 1-based lines, and the column it ends before.
+   * Absent when nothing is highlighted.
+   */
+  highlight?: { startLine: number; endLine: number; endColumn: number; text: string }
 }
 
 export function getBridge(): Bridge {

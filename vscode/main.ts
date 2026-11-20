@@ -68,7 +68,7 @@ import { getBridge } from './bridge'
 import { TerminalFileSystemProvider } from './fs-provider'
 import { registerOpenFolder } from './open-folder'
 import { getTerminalSearchServiceOverride } from './search'
-import { publishSelection } from './selection'
+import { reportOpenFile } from './selection'
 import { HostTerminalBackend } from './terminal-backend'
 import { provideTitleSlot } from './title-slot'
 
@@ -172,5 +172,5 @@ await initialize(
   { userHome: URI.file(bridge.folder) },
 )
 
-void publishSelection(bridge)
+void reportOpenFile(bridge)
 provideTitleSlot(bridge)

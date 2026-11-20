@@ -327,11 +327,6 @@ async function defaultFolder(ctx: AppActionContext, params: Params) {
   return { folder }
 }
 
-/** The instance's own address, for the chat reference the editor hands its agent. */
-async function appInfo(ctx: AppActionContext) {
-  return { address: `${ctx.spaceSlug}.${ctx.slug}` }
-}
-
 // Text conveniences for agents, over the same operations.
 async function read(ctx: AppActionContext, params: Params) {
   const { base64 } = await readFile(ctx, params)
@@ -396,7 +391,6 @@ export const apps: AppsExport = {
       write,
       terminalConnection,
       defaultFolder,
-      appInfo,
       findFiles,
       searchText,
     },

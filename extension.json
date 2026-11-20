@@ -1,7 +1,7 @@
 {
   "id": "opencroft.code-editor",
   "name": "Code Editor",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "VS Code (monaco-vscode-api workbench) on a folder of one of the space's terminals.",
   "provides": {
     "apps": [
@@ -276,14 +276,6 @@
                 }
               },
               "required": ["terminal"]
-            }
-          },
-          {
-            "id": "appInfo",
-            "description": "This instance's address (<space>.<slug>).",
-            "inputSchema": {
-              "type": "object",
-              "properties": {}
             }
           }
         ]
